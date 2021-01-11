@@ -2,14 +2,19 @@ const express = require('express');
 
 //로그인 관련 미들웨어
 const { isLoggedIn, isNotLoggedIn } = require('./middlewares');
+// 메인 페이지에서 게시글 함께 로딩
+const { Post, User, Hashtag } = require('../models');
+
 
 const router = express.Router();
 
 router.use((req, res, next)=>{
     res.locals.user = req.user;
-    res.locals.followerCount = 0;
-    res.locals.followingCount = 0;
-    res.locals.followerIdList = [];
+
+    // 팔로잉, 팔로워 숫자와 팔로우 버튼 표시
+    res.locals.followerCount = req.user? req.user.Followers.length : 0;
+    res.locals.followingCount = req.user? req.user.Followings.length : 0;
+    res.locals.followerIdList = req.user? req.user.Followings.map(f=>f.id): [];
     next();
 });
 
@@ -24,12 +29,49 @@ router.get('/join', isNotLoggedIn, (req, res)=>{
     res.render('join', {title : '회원 가입 - nodeBBBBiRD'});
 });
 
-router.get('/', (req, res, next)=>{
-    const twits = [];
-    res.render('main', {
-        title: "NODE BIRD",
-        twits,
-    });
+// DB에서 게시글 조회하고, 결과는 twits에 넣어 렌더링
+router.get('/', async (req, res, next)=>{
+    try{
+        const posts = await Post.findAll({
+            // 글 작성자의 아이디와 닉네임을 join해서 적용, 순서는 최신순
+            include: {
+                model:User,
+                attributes : ['id', 'nick'],
+            },
+            order : [['createdAt', 'DESC']],
+        });
+        res.render('main', {
+            title:'NodeBBBIrd',
+            twits:posts,
+        });
+    } catch(err){
+        console.error(err);
+        next(err);
+    }
+});
+
+// 해시 태그로 조회
+router.get('/hashtag', async(req, res, next)=>{
+    const query = req.query.hashtag;
+    if(!query){
+        return res.redirect('/');
+    }
+    try{
+        const hashtag = await Hashtag.findOne({where : {title : query}});
+        let posts = [];
+        if(hashtag){
+            posts = await hashtag.getPosts({ include : [{model :User}]});
+        }
+
+        // 조회 후에 메인으로 렌더링 하면서 전체 게시글 대신 조회된 게시글만 트윗에 넣겠다.
+        return res.render('main', {
+            title : `${query} | Nodebird`,
+            twits : posts,
+        });
+    }catch(err){
+        console.error(err);
+        return next(err);
+    }
 });
 
 module.exports = router;
