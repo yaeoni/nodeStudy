@@ -1,5 +1,8 @@
 const jwt = require('jsonwebtoken');
 
+// 트래픽 제한
+const RateLimit = require('express-rate-limit');
+
 exports.verifyToken = (req, res, next)=>{
     try{
         // 사용자가 헤더에 토큰을 넣어보낼거임, verify로 토큰 검증 
@@ -38,3 +41,26 @@ exports.isNotLoggedIn = (req, res, next)=>{
         res.redirect(`/?error=${message}`);
     }
 };
+
+exports.apiLimiter = new RateLimit({
+    // 기준 시간
+    windowMs: 60*1000,
+    // 허용 횟수
+    max:1,
+    //호출 간격
+    delayMs:0,
+    // 제한 초과 시의 콜백 함수
+    handler(req, res){
+        res.status(this.statusCode).json({
+            code:this.statusCode,
+            message:'1분에 1번의 요청만!',
+        });
+    }
+});
+
+exports.deprecated = (req, res) =>{
+    res.status(410).json({
+        code:410,
+        message:'new version! is coming'
+    })
+}
